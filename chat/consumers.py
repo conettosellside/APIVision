@@ -7,6 +7,7 @@ import ssl
 from PIL import Image
 from io import BytesIO
 import constants
+import os
 
 class MQTTConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -17,9 +18,9 @@ class MQTTConsumer(AsyncWebsocketConsumer):
         self.client.on_connect = self.on_connect  # Definir callback para cuando se conecte al broker
         self.client.on_message = self.on_message  # Definir callback para cuando llegue un mensaje
         self.client.tls_set(
-            ca_certs=constants.BROKER_CA_CERT,
-            certfile=constants.BROKER_CERT,
-            keyfile=constants.BROKER_KEY,
+            ca_certs=os.path.join(os.getcwd(), constants.BROKER_CA_CERT),
+            certfile=os.path.join(os.getcwd(), constants.BROKER_CERT),
+            keyfile=os.path.join(os.getcwd(), constants.BROKER_KEY),
             cert_reqs=ssl.CERT_REQUIRED,
             tls_version=ssl.PROTOCOL_TLS,
             ciphers=None
