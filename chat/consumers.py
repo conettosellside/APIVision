@@ -101,6 +101,7 @@ class CameraConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None):
         if bytes_data:
+            print("Received bytes data", bytes_data)
             # Comprime la imagen usando JPEG antes de enviarla
             _, image = await asyncio.get_event_loop().run_in_executor(None, cv2.imencode, '.jpg', cv2.imdecode(np.frombuffer(bytes_data, dtype=np.uint8), 1))
             compressed_image_bytes = image.tobytes()
@@ -112,6 +113,18 @@ class CameraConsumer(AsyncWebsocketConsumer):
                     'message': compressed_image_bytes,
                 }
             )
+        elif text_data:
+            print("Received text data", text_data)
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    'type': 'camera_message',
+                    'message': text_data,
+                }
+            )
+        
+        else:
+            print("No data received")
 
     async def camera_message(self, event):
         try: 
