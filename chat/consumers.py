@@ -1,6 +1,8 @@
+from email.mime import base
 import json
 import paho.mqtt.client as mqtt
 from channels.generic.websocket import AsyncWebsocketConsumer
+from autobahn.exception import Disconnected
 from asgiref.sync import async_to_sync
 import base64
 import ssl
@@ -8,6 +10,9 @@ from PIL import Image
 from io import BytesIO
 import constants
 import os
+import asyncio
+import cv2
+import numpy as np
 
 class MQTTConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -77,3 +82,77 @@ class MQTTConsumer(AsyncWebsocketConsumer):
             # Enviar el mensaje al broker MQTT
             self.client.publish(constants.TOPIC_CAMERA['CONTROL_SERVER'], bytes_data)
             print(f"Sent message: {bytes_data}")
+
+class CameraConsumer(AsyncWebsocketConsumer):
+
+    async def connect(self):
+        self.group_name = 'camera_group'
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data=None, bytes_data=None):
+        if bytes_data:
+            # Comprime la imagen usando JPEG antes de enviarla
+            _, image = await asyncio.get_event_loop().run_in_executor(None, cv2.imencode, '.jpg', cv2.imdecode(np.frombuffer(bytes_data, dtype=np.uint8), 1))
+            compressed_image_bytes = image.tobytes()
+
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    'type': 'camera_message',
+                    'message': compressed_image_bytes,
+                }
+            )
+
+    async def camera_message(self, event):
+        try: 
+            message = event['message']
+            await self.send(bytes_data=message)
+        except Disconnected:
+            print("Client disconnected")
+
+
+class ClientCameraConsumer(AsyncWebsocketConsumer):        
+    async def connect(self):
+        self.image_chunks = []
+        self.group_name = 'camera_group'
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data=None, bytes_data=None):
+        message = text_data
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                'type': 'camera_message',
+                'message': message
+            }
+        )
+
+    async def camera_message(self, event):
+        try:
+            message = event['message']
+
+            # Envía cada fragmento de imagen al cliente tan pronto como se reciba
+            await self.send(bytes_data=message)
+            
+        except Disconnected:
+            print("Client disconnected")

@@ -1,18 +1,25 @@
-# Python image to use.
-FROM python:3.12-alpine
+# Usa una imagen oficial de Python como imagen base.
+FROM python:3.12-slim
 
-# Set the working directory to /app
+# Establece el directorio de trabajo en el contenedor.
 WORKDIR /app
 
-# copy the requirements file used for dependencies
+# Actualiza e instala dependencias del sistema necesarias para OpenCV.
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copia el archivo de requisitos y lo instala. Asume que tienes Daphne, Django y OpenCV en el archivo.
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --trusted-host pypi.python.org -r requirements.txt
-#RUN pip install -r requirements.txt
-
-# Copy the rest of the working directory contents into the container at /app
+# Copia el resto de tu aplicación Django al contenedor.
 COPY . .
 
-# Run app.py when the container launches
-ENTRYPOINT ["python", "manage.py", "runserver", "--noreload"]
+# Ejecuta migraciones. Si tu aplicación no necesita migraciones, puedes omitir este paso.
+RUN python manage.py migrate
+
+# Define el comando para iniciar el servidor Daphne. Asegúrate de usar la variable de entorno $PORT.
+CMD daphne -b 0.0.0.0 -p $PORT mysite.asgi:application
